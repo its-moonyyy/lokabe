@@ -29,6 +29,8 @@ RUN docker-php-ext-install pdo_mysql \
 # Application + deployment files
 COPY api/ /var/www/api/
 COPY docker/apache.conf.template /etc/apache2/poker-apache.conf.template
+COPY docker/mariadb.cnf /etc/mysql/mariadb.conf.d/90-poker.cnf
+COPY docker/mpm_prefork.conf /etc/apache2/mods-available/mpm_prefork.conf
 COPY docker/start.sh /start.sh
 
 RUN a2enmod rewrite && chmod +x /start.sh

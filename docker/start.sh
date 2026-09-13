@@ -20,10 +20,7 @@ echo "Starting MariaDB..."
 mariadbd --user=mysql --datadir=/var/lib/mysql \
     --socket=/run/mysqld/mysqld.sock \
     --pid-file=/run/mysqld/mysqld.pid \
-    --innodb-use-native-aio=0 \
-    --innodb-buffer-pool-size=64M \
-    --max-connections=25 \
-    --log-error=/var/log/mariadb.err &
+    --log-error=/var/lib/mysql/mariadb.err &
 MARIADB_PID=$!
 
 for i in $(seq 1 60); do
@@ -32,8 +29,9 @@ for i in $(seq 1 60); do
     fi
     if ! kill -0 "$MARIADB_PID" 2>/dev/null; then
         echo "MariaDB failed to start" >&2
-        echo "--- /var/log/mariadb.err ---" >&2
-        tail -60 /var/log/mariadb.err >&2 || true
+        echo "--- /var/lib/mysql/mariadb.err ---" >&2
+        tail -60 /var/lib/mysql/mariadb.err >&2 || true
+        cat /proc/meminfo | grep -E "MemTotal|MemFree|MemAvailable" >&2 || true
         exit 1
     fi
     sleep 1
@@ -42,6 +40,10 @@ done
 # Allow the PHP app to connect over TCP as root (default is unix_socket auth)
 mariadb --socket=/run/mysqld/mysqld.sock -uroot <<'SQL'
 ALTER USER 'root'@'localhost' IDENTIFIED VIA mysql_native_password USING PASSWORD('');
+CREATE USER IF NOT EXISTS 'root'@'127.0.0.1' IDENTIFIED VIA mysql_native_password USING PASSWORD('');
+GRANT ALL PRIVILEGES ON *.* TO 'root'@'127.0.0.1' WITH GRANT OPTION;
+CREATE USER IF NOT EXISTS 'root'@'%' IDENTIFIED VIA mysql_native_password USING PASSWORD('');
+GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' WITH GRANT OPTION;
 FLUSH PRIVILEGES;
 SQL
 

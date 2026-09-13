@@ -6,7 +6,12 @@ PORT="${PORT:-10000}"
 sed "s/__PORT__/${PORT}/g" /etc/apache2/poker-apache.conf.template \
     > /etc/apache2/sites-enabled/000-poker.conf
 
-# ---- MariaDB ----------------------------------------------------------
+# ---- Start Apache FIRST so the service becomes healthy right away ----
+echo "Starting Apache on port ${PORT}..."
+apache2-foreground &
+APACHE_PID=$!
+
+# ---- MariaDB (inits in the background on slow instances) -------------
 if [ ! -d "/var/lib/mysql/mysql" ]; then
     echo "Initializing MariaDB data directory..."
     mariadb-install-db --user=mysql --datadir=/var/lib/mysql \
@@ -23,8 +28,9 @@ mariadbd --user=mysql --datadir=/var/lib/mysql \
     --log-error=/var/lib/mysql/mariadb.err &
 MARIADB_PID=$!
 
-for i in $(seq 1 60); do
+for i in $(seq 1 90); do
     if mariadb-admin --socket=/run/mysqld/mysqld.sock -uroot ping >/dev/null 2>&1; then
+        echo "MariaDB ready after ${i}s"
         break
     fi
     if ! kill -0 "$MARIADB_PID" 2>/dev/null; then
@@ -32,18 +38,13 @@ for i in $(seq 1 60); do
         echo "MariaDB died with exit code / signal: $?" >&2
         echo "--- /var/lib/mysql/mariadb.err ---" >&2
         tail -60 /var/lib/mysql/mariadb.err >&2 || true
-        echo "--- ulimit -a ---" >&2
-        ulimit -a >&2 || true
-        echo "--- df -h /var/lib/mysql ---" >&2
-        df -h /var/lib/mysql >&2 || true
-        cat /proc/meminfo | grep -E "MemTotal|MemFree|MemAvailable" >&2 || true
         exit 1
     fi
     sleep 1
 done
 
 # Allow the PHP app to connect over TCP as root (default is unix_socket auth)
-mariadb --socket=/run/mysqld/mysqld.sock -uroot <<'SQL'
+mariadb --socket=/run/mysqld/mysqld.sock -uroot <<'SQL' || true
 ALTER USER 'root'@'localhost' IDENTIFIED VIA mysql_native_password USING PASSWORD('');
 CREATE USER IF NOT EXISTS 'root'@'127.0.0.1' IDENTIFIED VIA mysql_native_password USING PASSWORD('');
 GRANT ALL PRIVILEGES ON *.* TO 'root'@'127.0.0.1' WITH GRANT OPTION;
@@ -58,6 +59,5 @@ if ! mariadb --socket=/run/mysqld/mysqld.sock -uroot \
     mariadb --socket=/run/mysqld/mysqld.sock -uroot < /var/www/api/schema.sql
 fi
 
-# ---- Apache (foreground = PID 1) --------------------------------------
-echo "Starting Apache on port ${PORT}..."
-exec apache2-foreground
+# ---- Keep Apache in the foreground (it is now PID 1's child) ---------
+wait "$APACHE_PID"

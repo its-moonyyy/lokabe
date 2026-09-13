@@ -32,8 +32,11 @@ COPY docker/apache.conf.template /etc/apache2/poker-apache.conf.template
 COPY docker/mariadb.cnf /etc/mysql/mariadb.conf.d/90-poker.cnf
 COPY docker/mpm_prefork.conf /etc/apache2/mods-available/mpm_prefork.conf
 COPY docker/start.sh /start.sh
+COPY docker/mariadb-init.sh /mariadb-init.sh
 
-RUN a2enmod rewrite && chmod +x /start.sh
+RUN a2enmod rewrite \
+    && chmod +x /start.sh /mariadb-init.sh \
+    && /mariadb-init.sh
 
 EXPOSE 10000
 CMD ["/start.sh"]

@@ -28,9 +28,14 @@ for i in $(seq 1 60); do
         break
     fi
     if ! kill -0 "$MARIADB_PID" 2>/dev/null; then
-        echo "MariaDB failed to start" >&2
+        wait "$MARIADB_PID"
+        echo "MariaDB died with exit code / signal: $?" >&2
         echo "--- /var/lib/mysql/mariadb.err ---" >&2
         tail -60 /var/lib/mysql/mariadb.err >&2 || true
+        echo "--- ulimit -a ---" >&2
+        ulimit -a >&2 || true
+        echo "--- df -h /var/lib/mysql ---" >&2
+        df -h /var/lib/mysql >&2 || true
         cat /proc/meminfo | grep -E "MemTotal|MemFree|MemAvailable" >&2 || true
         exit 1
     fi

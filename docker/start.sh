@@ -19,7 +19,11 @@ chown -R mysql:mysql /var/lib/mysql /run/mysqld 2>/dev/null || true
 echo "Starting MariaDB..."
 mariadbd --user=mysql --datadir=/var/lib/mysql \
     --socket=/run/mysqld/mysqld.sock \
-    --pid-file=/run/mysqld/mysqld.pid &
+    --pid-file=/run/mysqld/mysqld.pid \
+    --innodb-use-native-aio=0 \
+    --innodb-buffer-pool-size=64M \
+    --max-connections=25 \
+    --log-error=/var/log/mariadb.err &
 MARIADB_PID=$!
 
 for i in $(seq 1 60); do
@@ -28,6 +32,8 @@ for i in $(seq 1 60); do
     fi
     if ! kill -0 "$MARIADB_PID" 2>/dev/null; then
         echo "MariaDB failed to start" >&2
+        echo "--- /var/log/mariadb.err ---" >&2
+        tail -60 /var/log/mariadb.err >&2 || true
         exit 1
     fi
     sleep 1

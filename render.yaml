@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: poker-lokabe
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: free
+    region: oregon
+    branch: main
+    healthCheckPath: /
+    buildPlan: starter
+    envVars:
+      - key: PORT
+        value: "10000"
+      - key: API_BASE
+        value: /api
+    disk:
+      name: mariadb-data
+      mountPath: /var/lib/mysql
+      sizeGB: 1
